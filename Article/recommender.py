@@ -97,7 +97,7 @@ def recommend_articles(title, top_n=5):
         return ["Error generating recommendations"]
 
 # Streamlit UI
-st.set_page_config(layout="wide")
+# st.set_page_config(layout="wide")
 
 # Sidebar with article selection
 with st.sidebar:
