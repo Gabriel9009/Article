@@ -2,7 +2,9 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
+import streamlit as st
 
+@st.cache_data  # Cache the data loading for better performance
 def load_articles():
     """Load articles data with robust path handling and error checking"""
     try:
@@ -12,6 +14,7 @@ def load_articles():
         # Construct potential paths to the CSV file
         possible_paths = [
             os.path.join(script_dir, "articles.csv"),  # Same directory as script
+            os.path.join(script_dir, "data", "articles.csv"),  # In a data subdirectory
             os.path.join(os.getcwd(), "articles.csv"),  # Current working directory
             "/mount/src/article/Article/articles.csv"  # Absolute path you mentioned
         ]
@@ -29,7 +32,7 @@ def load_articles():
                 if not required_columns.issubset(df.columns):
                     raise ValueError(f"CSV missing required columns. Needs: {required_columns}")
                 
-                print(f"Successfully loaded articles from: {path}")
+                st.success(f"Successfully loaded articles from: {path}")
                 return df
                 
             except pd.errors.EmptyDataError:
@@ -47,13 +50,13 @@ def load_articles():
         )
         
     except Exception as e:
-        print(f"Error loading articles: {str(e)}")
+        st.error(f"Error loading articles: {str(e)}")
         return None
 
 # Load articles with error handling
 df = load_articles()
 if df is None:
-    raise SystemExit("❌ Failed to load article data - exiting application")
+    st.stop()
 
 # Process articles
 try:
@@ -67,7 +70,8 @@ try:
     cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
     
 except Exception as e:
-    raise SystemExit(f"❌ Error processing articles: {str(e)}")
+    st.error(f"Error processing articles: {str(e)}")
+    st.stop()
 
 def recommend_articles(title, top_n=5):
     """Get article recommendations with input validation"""
@@ -89,5 +93,49 @@ def recommend_articles(title, top_n=5):
         return [df.iloc[i[0]]['Title'] for i in sim_scores]
         
     except Exception as e:
-        print(f"Recommendation error: {str(e)}")
+        st.error(f"Recommendation error: {str(e)}")
         return ["Error generating recommendations"]
+
+# Streamlit UI
+st.set_page_config(layout="wide")
+
+# Sidebar with article selection
+with st.sidebar:
+    st.header("📚 Available Articles")
+    selected_article = st.selectbox(
+        "Choose an article to get recommendations:",
+        df['Title'].tolist(),
+        index=0,
+        help="Select an article from the list to see similar recommendations"
+    )
+    
+    st.markdown("---")
+    st.markdown("### How to use:")
+    st.markdown("1. Select an article from the list")
+    st.markdown("2. View recommendations on the right")
+    st.markdown("3. Or search for any article in the search box")
+
+# Main content area
+st.title("📖 Article Recommender System")
+st.markdown("Discover articles similar to the one you're reading")
+
+# Search functionality
+search_query = st.text_input(
+    "Or search for an article:",
+    placeholder="Type an article title..."
+)
+
+# Determine which article to use (sidebar selection or search)
+article_to_recommend = search_query if search_query else selected_article
+
+# Get and display recommendations
+recommendations = recommend_articles(article_to_recommend)
+
+if recommendations and not recommendations[0].startswith(("Article not found", "Invalid input", "Please enter")):
+    st.subheader(f"Recommended articles similar to: '{article_to_recommend}'")
+    for i, rec in enumerate(recommendations, 1):
+        st.markdown(f"{i}. {rec}")
+elif recommendations:
+    st.warning(recommendations[0])
+else:
+    st.info("No recommendations available")
